@@ -127,9 +127,18 @@ function downloadAudio(url, destDir) {
     { encoding: "utf8" },
   );
   if (res.status !== 0) {
+    const stderr = (res.stderr || "").trim();
+    const lowered = stderr.toLowerCase();
+    if (lowered.includes("ffmpeg") || lowered.includes("ffprobe")) {
+      throw new Error(
+        "yt-dlp needs ffmpeg to extract audio from videos. " +
+          "Install it with: brew install ffmpeg  (or: apt install ffmpeg / pacman -S ffmpeg)\n" +
+          `yt-dlp stderr: ${stderr.slice(0, 600)}`,
+      );
+    }
     throw new Error(
       "yt-dlp failed to download the URL. The reel/video may be private, age-gated, or removed.\n" +
-        `yt-dlp stderr: ${(res.stderr || "").trim().slice(0, 600)}`,
+        `yt-dlp stderr: ${stderr.slice(0, 600)}`,
     );
   }
   const files = readdirSync(destDir).filter((f) => f.endsWith(".m4a"));

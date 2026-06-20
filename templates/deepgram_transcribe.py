@@ -153,9 +153,17 @@ def _download_audio(url: str, dest_dir: Path) -> tuple[Path, str]:
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or "").strip()
+        lowered = stderr.lower()
+        if "ffmpeg" in lowered or "ffprobe" in lowered:
+            raise RuntimeError(
+                "yt-dlp needs ffmpeg to extract audio from videos. "
+                "Install it with: brew install ffmpeg  (or: apt install ffmpeg / pacman -S ffmpeg)\n"
+                f"yt-dlp stderr: {stderr[:600]}"
+            ) from exc
         raise RuntimeError(
-            f"yt-dlp failed to download the URL. The reel/video may be private, age-gated, or removed.\n"
-            f"yt-dlp stderr: {(exc.stderr or '').strip()[:600]}"
+            "yt-dlp failed to download the URL. The reel/video may be private, age-gated, or removed.\n"
+            f"yt-dlp stderr: {stderr[:600]}"
         ) from exc
     files = list(dest_dir.glob("*.m4a"))
     if not files:
