@@ -142,14 +142,25 @@ def _is_url(arg: str) -> bool:
 
 
 def _download_audio(url: str, dest_dir: Path) -> tuple[Path, str]:
-    """Download audio from a URL with yt-dlp. Returns (audio_path, stem-for-output)."""
+    """Download audio from a URL with yt-dlp. Returns (audio_path, stem-for-output).
+
+    Uses `-f bestaudio/best` to grab the source's native audio container (m4a,
+    webm, mp4, …) without conversion — Deepgram accepts all of these directly,
+    so we avoid the ffmpeg dependency entirely for the typical case.
+    """
     if not shutil.which("yt-dlp"):
         raise RuntimeError(
             "yt-dlp not found. Install with: brew install yt-dlp  (or: pipx install yt-dlp)"
         )
     out_template = str(dest_dir / "%(id)s.%(ext)s")
-    cmd = ["yt-dlp", "-x", "--audio-format", "m4a", "--no-playlist",
-           "--quiet", "--no-warnings", "-o", out_template, url]
+    cmd = [
+        "yt-dlp",
+        "-f", "bestaudio/best",       # native audio, no re-encode → no ffmpeg needed
+        "--no-playlist",
+        "--quiet", "--no-warnings",
+        "-o", out_template,
+        url,
+    ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as exc:
@@ -157,15 +168,16 @@ def _download_audio(url: str, dest_dir: Path) -> tuple[Path, str]:
         lowered = stderr.lower()
         if "ffmpeg" in lowered or "ffprobe" in lowered:
             raise RuntimeError(
-                "yt-dlp needs ffmpeg to extract audio from videos. "
-                "Install it with: brew install ffmpeg  (or: apt install ffmpeg / pacman -S ffmpeg)\n"
+                "yt-dlp needs ffmpeg for this specific URL (it has separate audio+video streams "
+                "that must be merged). Install it with: brew install ffmpeg  "
+                "(Linux: apt install ffmpeg / pacman -S ffmpeg).\n"
                 f"yt-dlp stderr: {stderr[:600]}"
             ) from exc
         raise RuntimeError(
             "yt-dlp failed to download the URL. The reel/video may be private, age-gated, or removed.\n"
             f"yt-dlp stderr: {stderr[:600]}"
         ) from exc
-    files = list(dest_dir.glob("*.m4a"))
+    files = [p for p in dest_dir.iterdir() if p.is_file()]
     if not files:
         raise RuntimeError("yt-dlp finished but produced no audio file — unexpected.")
     audio = files[0]

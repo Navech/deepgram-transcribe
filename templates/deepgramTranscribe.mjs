@@ -113,26 +113,29 @@ function isUrl(arg) {
 }
 
 function downloadAudio(url, destDir) {
-  if (!spawnSync("yt-dlp", ["--version"], { stdio: "ignore" }).status === 0) {
-    // fall-through; spawnSync returns object even on ENOENT
-  }
   const check = spawnSync("yt-dlp", ["--version"], { stdio: "ignore" });
   if (check.error || check.status !== 0) {
     throw new Error("yt-dlp not found. Install with: brew install yt-dlp  (or: pipx install yt-dlp)");
   }
+  // Use `-f bestaudio/best` so yt-dlp gives us the source's native audio (m4a,
+  // webm, mp4, …) without re-encoding — Deepgram accepts all of these, so we
+  // avoid the ffmpeg dependency for the typical case.
   const outTemplate = path.join(destDir, "%(id)s.%(ext)s");
-  const res = spawnSync(
-    "yt-dlp",
-    ["-x", "--audio-format", "m4a", "--no-playlist", "--quiet", "--no-warnings", "-o", outTemplate, url],
-    { encoding: "utf8" },
-  );
+  const args = [
+    "-f", "bestaudio/best",
+    "--no-playlist",
+    "--quiet", "--no-warnings",
+    "-o", outTemplate,
+    url,
+  ];
+  const res = spawnSync("yt-dlp", args, { encoding: "utf8" });
   if (res.status !== 0) {
     const stderr = (res.stderr || "").trim();
     const lowered = stderr.toLowerCase();
     if (lowered.includes("ffmpeg") || lowered.includes("ffprobe")) {
       throw new Error(
-        "yt-dlp needs ffmpeg to extract audio from videos. " +
-          "Install it with: brew install ffmpeg  (or: apt install ffmpeg / pacman -S ffmpeg)\n" +
+        "yt-dlp needs ffmpeg for this specific URL (separate audio+video streams to merge). " +
+          "Install it with: brew install ffmpeg  (Linux: apt install ffmpeg / pacman -S ffmpeg)\n" +
           `yt-dlp stderr: ${stderr.slice(0, 600)}`,
       );
     }
@@ -141,10 +144,10 @@ function downloadAudio(url, destDir) {
         `yt-dlp stderr: ${stderr.slice(0, 600)}`,
     );
   }
-  const files = readdirSync(destDir).filter((f) => f.endsWith(".m4a"));
+  const files = readdirSync(destDir);
   if (files.length === 0) throw new Error("yt-dlp finished but produced no audio file — unexpected.");
   const audio = path.join(destDir, files[0]);
-  const stem = files[0].replace(/\.m4a$/, "");
+  const stem = files[0].replace(/\.[^.]+$/, "");
   return { audio, stem };
 }
 

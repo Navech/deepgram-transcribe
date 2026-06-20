@@ -92,7 +92,8 @@ python3 ~/.claude/skills/deepgram-transcribe/templates/deepgram_transcribe.py "h
 
 Verificaciones previas:
 - `yt-dlp` debe estar en PATH. Si no: `brew install yt-dlp` (o `pipx install yt-dlp`). El script da el mensaje.
-- Para **contenido privado** (cuentas privadas, lives), agregar cookies del navegador: el usuario debe correr `yt-dlp --cookies-from-browser chrome -x --audio-format m4a "<url>" -o audio.m4a` y luego usar Modo B sobre el archivo.
+- **No requiere ffmpeg** en el caso típico — el template usa `-f bestaudio/best` (audio nativo del origen, sin reconvertir) y Deepgram acepta m4a/webm/mp4 directamente. Solo si la URL trae streams separados, el script pide `brew install ffmpeg`.
+- Para **contenido privado** (cuentas privadas, lives), agregar cookies del navegador: el usuario debe correr `yt-dlp --cookies-from-browser chrome -f bestaudio/best "<url>" -o audio.m4a` y luego usar Modo B sobre el archivo.
 
 El `.txt`/`.md` se guarda en el CWD con el `id` del video como nombre (a no ser que se use `--out -`).
 

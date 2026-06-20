@@ -18,7 +18,7 @@ Defaults: modelo `nova-3` multilingüe, `smart_format` activado, salida `.txt` j
 | API key de Deepgram | Registrarse gratis en https://console.deepgram.com (incluye **$200 USD en créditos**) |
 | Python 3.11+ **o** Node 18+ | Según el proyecto donde lo uses |
 | `yt-dlp` *(opcional, solo para URLs)* | `brew install yt-dlp` o `pipx install yt-dlp` |
-| `ffmpeg` *(opcional, solo para URLs)* | `brew install ffmpeg` — yt-dlp lo necesita para extraer el audio |
+| `ffmpeg` *(opcional, raro)* | Solo necesario para algunas URLs que entregan audio+video en pistas separadas y exigen merge. Para el 99% de los casos **no hace falta** (el template usa `-f bestaudio/best`, audio nativo sin conversión). Si lo necesitas: `brew install ffmpeg`. |
 
 ---
 
@@ -123,7 +123,7 @@ python3 deepgram_transcribe.py <audio-o-url...> [opciones]
 - **`deepgram-sdk` / `@deepgram/sdk` no instalado** → `pip install deepgram-sdk` o `npm install @deepgram/sdk`.
 - **`401 Unauthorized` / "insufficient credits"** → verificar la key en https://console.deepgram.com y el saldo de tu cuenta.
 - **`yt-dlp not found`** → `brew install yt-dlp` o `pipx install yt-dlp`.
-- **`yt-dlp needs ffmpeg`** → `brew install ffmpeg` (Linux: `apt install ffmpeg` / `pacman -S ffmpeg`). yt-dlp baja el video pero necesita ffmpeg para extraer el audio.
+- **`yt-dlp needs ffmpeg`** → Caso raro: la URL trae audio+video en pistas separadas y yt-dlp necesita ffmpeg para mergearlas. Instala con `brew install ffmpeg` (Linux: `apt install ffmpeg` / `pacman -S ffmpeg`). En general el template evita esto pidiéndole a yt-dlp el audio nativo (`-f bestaudio/best`) — Deepgram acepta m4a/webm/mp4 directos sin reconvertir.
 - **`yt-dlp failed: ... unavailable`** → el video es privado, fue eliminado, o está geobloqueado. Probar con cookies del navegador como se explica en Modo C.
 - **`write operation timed out`** (archivos grandes) → subir `--timeout` (p. ej. 1200) y/o `--retries`.
 - **Transcripción vacía** → audio sin habla, corrupto, o formato no soportado. Probar otro archivo.
