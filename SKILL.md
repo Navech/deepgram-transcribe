@@ -1,6 +1,6 @@
 ---
 name: deepgram-transcribe
-description: Cubre todo el ciclo de transcripción de audio con Deepgram en cualquier proyecto. Tres modos según lo que pida el usuario - (A) SETUP - configura Deepgram en el proyecto actual (instala deepgram-sdk / @deepgram/sdk, copia el módulo transcriptor, deja DEEPGRAM_API_KEY en .env/.env.example con .gitignore, corre smoke test); (B) TRANSCRIBE ARCHIVO - transcribe un audio local (m4a/mp3/wav/ogg/webm/flac/aac) imprimiendo o guardando .txt/.md junto al archivo; (C) TRANSCRIBE URL - baja con yt-dlp y transcribe URLs de Instagram reels, YouTube, TikTok, X/Twitter. Defaults nova-3, multilingüe, smart_format. Usar cuando el usuario invoca /deepgram-transcribe o pide "configura Deepgram aquí", "deja Deepgram listo", "transcribe este audio", "transcríbeme esto", "pasa esto a texto", "transcribe este reel/video/short", "transcribe https://...", o pega un link de IG/YouTube/TikTok pidiendo el texto.
+description: Cubre todo el ciclo de transcripción de audio con Deepgram en cualquier proyecto, MÁS extraer imágenes de carruseles de Instagram. Cuatro modos según lo que pida el usuario - (A) SETUP - configura Deepgram en el proyecto actual (instala deepgram-sdk / @deepgram/sdk, copia el módulo transcriptor, deja DEEPGRAM_API_KEY en .env/.env.example con .gitignore, corre smoke test); (B) TRANSCRIBE ARCHIVO - transcribe un audio local (m4a/mp3/wav/ogg/webm/flac/aac) imprimiendo o guardando .txt/.md junto al archivo; (C) TRANSCRIBE URL - baja con yt-dlp y transcribe URLs de Instagram reels, YouTube, TikTok, X/Twitter; (D) CARRUSEL IG - baja con gallery-dl las imágenes de un post/carrusel de Instagram (fotos, no reel) y Claude las lee por VISIÓN para extraer y sintetizar la información valiosa de cada slide. Defaults nova-3, multilingüe, smart_format. Usar cuando el usuario invoca /deepgram-transcribe o pide "configura Deepgram aquí", "deja Deepgram listo", "transcribe este audio", "transcríbeme esto", "pasa esto a texto", "transcribe este reel/video/short", "transcribe https://...", "extrae las fotos de este carrusel/post de IG", "analiza este post de Instagram", "resume este carrusel", o pega un link de IG/YouTube/TikTok pidiendo el texto o el contenido.
 ---
 
 # deepgram-transcribe
@@ -16,8 +16,11 @@ Elige el modo según la intención del mensaje:
 | `/deepgram-transcribe` sin argumentos, "configura Deepgram aquí", "deja Deepgram listo en este repo" | **A — Setup** |
 | Menciona un archivo de audio local ("transcribe esto.m4a", "transcríbeme el audio X") | **B — Transcribe archivo** |
 | Pega una URL (IG reel, YouTube, TikTok, X) o dice "transcribe este reel/video" | **C — Transcribe URL** |
+| Pega un post de Instagram de **fotos/carrusel** (`/p/…` o `/reel/…` que es galería) o dice "extrae/analiza/resume las fotos de este post" | **D — Carrusel IG** |
 
-Si la intención es ambigua, asumir B/C antes que A (lo más frecuente).
+Si la intención es ambigua, asumir B/C/D antes que A (lo más frecuente).
+
+**Reel vs carrusel (ambos usan `/p/` o `/reel/`):** un mismo link puede ser video (Modo C) o galería de imágenes (Modo D). Si el usuario habla de "fotos", "carrusel", "slides", "infografía" → Modo D. Si habla de "audio", "lo que dice", "transcribe" → Modo C. Si no está claro y el Modo C reporta "No video formats found", es un carrusel → cae a Modo D.
 
 ## Defaults (NO preguntar — el usuario quiere rapidez)
 - Modelo: `nova-3` · Idioma: `multi` (multilingüe; mejor que `es` para audio en español).
@@ -99,13 +102,41 @@ El `.txt`/`.md` se guarda en el CWD con el `id` del video como nombre (a no ser 
 
 ---
 
+## Modo D — Carrusel de Instagram (fotos → VISIÓN)
+
+Para posts de **imágenes** (carruseles/infografías), no video. `yt-dlp` **no sirve** aquí: para Instagram solo baja formatos de video y devuelve "No video formats found". Se usa **gallery-dl**, que baja las N imágenes del post. Luego **Claude las lee por visión** (tool Read) y cura/extrae — mismo patrón de `clase-a-apunte` (capturar todo → la visión cura).
+
+### Flujo
+1. **Bajar y numerar** las slides con el helper:
+   ```bash
+   python3 ~/.claude/skills/deepgram-transcribe/templates/ig_carousel_fetch.py "https://www.instagram.com/p/XXXX/" --out ./ig_XXXX
+   ```
+   - Imprime en stdout la ruta absoluta de cada `slide_NN.png` en orden. Las descarga (gallery-dl), las ordena y convierte `.webp`→`.png` (con `sips` en macOS o Pillow).
+   - Por defecto usa `--browser chrome` para las cookies (Instagram casi siempre exige sesión). Si el usuario usa otro navegador, pasar `--browser safari|firefox`. Para no usar cookies: `--browser ''`.
+
+2. **Leer TODAS las PNG** con la herramienta Read (visión), en orden de slide. Se pueden leer varias por mensaje.
+
+3. **Curar y extraer** (rol de Claude, no del script):
+   - **Descartar** portadas puramente estéticas, slides de "guarda/comparte/sígueme", y decoración sin info (igual que `clase-a-apunte` descarta intro/outro).
+   - **Transcribir** el texto real de cada slide; **describir** figuras/diagramas/tablas si aportan.
+   - **Sintetizar** los puntos valiosos en orden, no slide-por-slide literal salvo que el usuario lo pida.
+   - Mantener criterio de **espejo, no oráculo**: si el post es marketing/hype, decirlo y separar lo aprovechable del gancho.
+
+### Verificaciones previas
+- `gallery-dl` en PATH o como módulo. Si falta: `python3 -m pip install --user gallery-dl` (o `pipx install gallery-dl`). El helper da el mensaje.
+- **Autenticación**: si gallery-dl reporta login/empty/403, reintentar con `--browser <navegador con sesión de IG>`. En macOS, Safari bloquea el acceso a sus cookies (usar Chrome/Firefox).
+- Conversión a PNG: `sips` viene con macOS; en otros SO instalar `Pillow`.
+
+---
+
 ## Estructura del skill
 
 - `SKILL.md` — este archivo.
 - `templates/deepgram_transcribe.py` — Python autocontenido + CLI (`argparse`). SDK v7: `DeepgramClient(api_key).listen.v1.media.transcribe_file(request=bytes, model=, language=, smart_format=, diarize=, request_options={timeout_in_seconds, max_retries})`.
 - `templates/deepgramTranscribe.mjs` — Node ESM + CLI. SDK v5+: `new DeepgramClient({apiKey}).listen.v1.media.transcribeFile(buffer, opts, {timeoutInSeconds, maxRetries})`.
+- `templates/ig_carousel_fetch.py` — Modo D: baja un carrusel de IG con gallery-dl, convierte a PNG numerados (`slide_NN.png`) e imprime sus rutas para leerlas por visión. Sin dependencias del SDK de Deepgram.
 
-Ambos parsean defensivamente: `response.results.channels[0].alternatives[0].transcript` + `.confidence`.
+Los transcriptores parsean defensivamente: `response.results.channels[0].alternatives[0].transcript` + `.confidence`.
 
 ## Errores comunes
 
@@ -116,3 +147,6 @@ Ambos parsean defensivamente: `response.results.channels[0].alternatives[0].tran
 - **`write operation timed out`**: subir `--timeout` (p. ej. 1200) o `--retries`.
 - **`yt-dlp not found`**: `brew install yt-dlp` o `pipx install yt-dlp`.
 - **`yt-dlp failed`**: video privado/eliminado/age-gated; probar con `--cookies-from-browser` aparte y usar Modo B.
+- **`No video formats found` en un link de IG**: es un carrusel de fotos, no video → usar **Modo D** (gallery-dl).
+- **`gallery-dl no está instalado`**: `python3 -m pip install --user gallery-dl` o `pipx install gallery-dl`.
+- **gallery-dl pide login / respuesta vacía / 403**: post que requiere sesión → `--browser chrome` (o el navegador con sesión de IG). En macOS, Safari bloquea sus cookies; usar Chrome/Firefox.

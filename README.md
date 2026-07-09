@@ -5,6 +5,7 @@ Claude Code skill todo-en-uno para [Deepgram](https://deepgram.com/) — el moto
 - **Setup** — configura Deepgram en el proyecto actual (instala el SDK, copia un módulo transcriptor reutilizable, deja `DEEPGRAM_API_KEY` en `.env`, corre smoke test).
 - **Transcribir archivos** — locales (`.m4a`, `.mp3`, `.wav`, `.ogg`, `.webm`, `.flac`, `.aac`).
 - **Transcribir URLs** — Instagram reels, YouTube, TikTok, X/Twitter… cualquier cosa que [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) sepa bajar.
+- **Carruseles de Instagram** — posts de **fotos** (no video): baja cada slide con [`gallery-dl`](https://github.com/mikf/gallery-dl) y Claude las lee por **visión** para extraer y sintetizar la info valiosa de cada imagen.
 
 Defaults: modelo `nova-3` multilingüe, `smart_format` activado, salida `.txt` junto al audio. Soporta Python y Node/JS — el skill detecta el runtime del proyecto.
 
@@ -18,6 +19,7 @@ Defaults: modelo `nova-3` multilingüe, `smart_format` activado, salida `.txt` j
 | API key de Deepgram | Registrarse gratis en https://console.deepgram.com (incluye **$200 USD en créditos**) |
 | Python 3.11+ **o** Node 18+ | Según el proyecto donde lo uses |
 | `yt-dlp` *(opcional, solo para URLs)* | `brew install yt-dlp` o `pipx install yt-dlp` |
+| `gallery-dl` *(opcional, solo para carruseles de IG)* | `pipx install gallery-dl` o `python3 -m pip install --user gallery-dl` |
 | `ffmpeg` *(opcional, raro)* | Solo necesario para algunas URLs que entregan audio+video en pistas separadas y exigen merge. Para el 99% de los casos **no hace falta** (el template usa `-f bestaudio/best`, audio nativo sin conversión). Si lo necesitas: `brew install ffmpeg`. |
 
 ---
@@ -98,6 +100,21 @@ python3 ~/.claude/skills/deepgram-transcribe/templates/deepgram_transcribe.py \
 
 > **Contenido privado** (cuentas privadas, lives suscritos): el skill no lo maneja directamente. Baja el audio aparte con `yt-dlp --cookies-from-browser chrome <url>` y luego usa el Modo B sobre el archivo.
 
+### Modo D · Carrusel de Instagram (fotos → análisis)
+
+> "Extrae las fotos de este carrusel: https://www.instagram.com/p/XXXX/"
+> "Analiza / resume este post de Instagram"
+
+→ Claude baja cada slide con `gallery-dl`, las convierte a PNG, las **lee por visión**, descarta la decoración/portadas y te sintetiza la información valiosa de cada imagen.
+
+Equivalente manual (baja + numera; luego Claude lee los PNG):
+```bash
+python3 ~/.claude/skills/deepgram-transcribe/templates/ig_carousel_fetch.py \
+  "https://www.instagram.com/p/XXXX/" --out ./ig_XXXX --browser chrome
+```
+
+> Instagram casi siempre exige sesión: el helper usa las cookies de Chrome por defecto (`--browser safari|firefox` para otro navegador). Ojo: `yt-dlp` **no** sirve para carruseles de fotos — solo baja video.
+
 ---
 
 ## Flags del CLI
@@ -124,6 +141,9 @@ python3 deepgram_transcribe.py <audio-o-url...> [opciones]
 - **`401 Unauthorized` / "insufficient credits"** → verificar la key en https://console.deepgram.com y el saldo de tu cuenta.
 - **`yt-dlp not found`** → `brew install yt-dlp` o `pipx install yt-dlp`.
 - **`yt-dlp needs ffmpeg`** → Caso raro: la URL trae audio+video en pistas separadas y yt-dlp necesita ffmpeg para mergearlas. Instala con `brew install ffmpeg` (Linux: `apt install ffmpeg` / `pacman -S ffmpeg`). En general el template evita esto pidiéndole a yt-dlp el audio nativo (`-f bestaudio/best`) — Deepgram acepta m4a/webm/mp4 directos sin reconvertir.
+- **`No video formats found` en un link de IG** → es un carrusel de **fotos**, no video. Usa el **Modo D** (`ig_carousel_fetch.py`, con `gallery-dl`).
+- **`gallery-dl no está instalado`** → `pipx install gallery-dl` o `python3 -m pip install --user gallery-dl`.
+- **gallery-dl: login / respuesta vacía / 403** → el post requiere sesión; pásale cookies con `--browser chrome` (o el navegador donde tengas IG abierto). En macOS, Safari bloquea el acceso a sus cookies — usa Chrome o Firefox.
 - **`yt-dlp failed: ... unavailable`** → el video es privado, fue eliminado, o está geobloqueado. Probar con cookies del navegador como se explica en Modo C.
 - **`write operation timed out`** (archivos grandes) → subir `--timeout` (p. ej. 1200) y/o `--retries`.
 - **Transcripción vacía** → audio sin habla, corrupto, o formato no soportado. Probar otro archivo.
@@ -146,7 +166,8 @@ deepgram-transcribe/
 ├── .gitignore
 └── templates/
     ├── deepgram_transcribe.py        # módulo Python autocontenido + CLI
-    └── deepgramTranscribe.mjs        # módulo Node ESM + CLI
+    ├── deepgramTranscribe.mjs        # módulo Node ESM + CLI
+    └── ig_carousel_fetch.py          # Modo D: baja carrusel de IG → PNG numerados
 ```
 
 Los templates son **standalone**: puedes usarlos directo (sin el skill, sin Claude Code) como una librería o como CLI, importándolos en cualquier proyecto.
