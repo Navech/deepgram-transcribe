@@ -129,6 +129,8 @@ python3 deepgram_transcribe.py <audio-o-url...> [opciones]
 | `--language` | `multi` | `multi` (multilingüe nova-3), o `es`, `en`, `auto` (autodetectar). |
 | `--no-smart-format` | off | Desactiva puntuación/capitalización automática. |
 | `--diarize` | off | Etiqueta hablantes (Speaker 0, 1, …). Útil para conversaciones. |
+| `--keyterm` | — | Término de dominio a priorizar (nova-3 keyterm prompting). Repetible: `--keyterm "Punta Cana" --keyterm disnea`. Sube la captura de nombres/jerga. |
+| `--keyterm-file` | — | Archivo con un keyterm por línea (`#` se ignora). Se combina con `--keyterm`. |
 | `--out` | `txt` | `txt` (junto al audio), `md` (con metadata), `-` (solo imprimir). |
 | `--timeout` | `600` | Segundos a esperar por la API. Subir para audios largos (`--timeout 1800`). |
 | `--retries` | `2` | Reintentos del SDK ante fallos transitorios. |

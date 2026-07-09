@@ -77,7 +77,9 @@ python3 ~/.claude/skills/deepgram-transcribe/templates/deepgram_transcribe.py "<
 ```
 (Equivalente Node con `node …deepgramTranscribe.mjs`.)
 
-Pasar `--language` (`es|en|auto|multi`), `--diarize`, `--out txt|md|-`, `--timeout <s>` según contexto.
+Pasar `--language` (`es|es-419|en|auto|multi`), `--diarize`, `--out txt|md|-`, `--timeout <s>` según contexto. Para español latino conviene `--language es-419`.
+
+**Precisión / `keyterm` (nova-3):** para que capture bien vocabulario propio (nombres, jerga médica, términos técnicos), pasar `--keyterm "Punta Cana" --keyterm disnea` (repetible) o `--keyterm-file terms.txt` (una por línea). Es la palanca real contra "se come/cambia nombres" — medido: recupera nombres propios que si no salen mal. Apuntar a 20-50 términos específicos.
 
 Si falta `DEEPGRAM_API_KEY` en el entorno o `.env` (CWD o junto al script), pedir al usuario que la pegue y exportarla para la sesión (`export DEEPGRAM_API_KEY=...`) o escribirla en un `.env` del CWD.
 

@@ -47,6 +47,7 @@ def transcribe(
     language: str | None = DEFAULT_LANGUAGE,
     smart_format: bool = True,
     diarize: bool = False,
+    keyterm: list[str] | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     max_retries: int = DEFAULT_RETRIES,
     api_key: str | None = None,
@@ -54,6 +55,9 @@ def transcribe(
     """Transcribe a local audio file and return {text, confidence, language}.
 
     `language=None` lets Deepgram auto-detect the language.
+    `keyterm` is a list of domain terms (names, jargon) to prioritize — nova-3
+    keyterm prompting; boosts recognition of specific vocabulary (works in
+    Spanish/multi). Aim for 20-50 specific terms.
     `timeout`/`max_retries` tune the SDK request (raise `timeout` for large files).
     """
     audio_path = Path(audio_path)
@@ -79,6 +83,8 @@ def transcribe(
         kwargs["language"] = language
     if diarize:
         kwargs["diarize"] = True
+    if keyterm:
+        kwargs["keyterm"] = list(keyterm)
 
     try:
         response = client.listen.v1.media.transcribe_file(**kwargs)
@@ -207,6 +213,7 @@ def _process_one(
     language: str | None,
     smart_format: bool,
     diarize: bool,
+    keyterm: list[str] | None,
     timeout: int,
     max_retries: int,
     out: str,
@@ -221,7 +228,7 @@ def _process_one(
                 label = audio_path.name
                 result = transcribe(
                     audio_path, model=model, language=language, smart_format=smart_format,
-                    diarize=diarize, timeout=timeout, max_retries=max_retries,
+                    diarize=diarize, keyterm=keyterm, timeout=timeout, max_retries=max_retries,
                 )
                 source = arg
                 # For URLs we write the output into the CWD (the temp dir is wiped).
@@ -230,7 +237,7 @@ def _process_one(
             path = Path(arg)
             result = transcribe(
                 path, model=model, language=language, smart_format=smart_format,
-                diarize=diarize, timeout=timeout, max_retries=max_retries,
+                diarize=diarize, keyterm=keyterm, timeout=timeout, max_retries=max_retries,
             )
             source = path.name
             out_base = path.with_suffix("")
@@ -267,6 +274,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-smart-format", action="store_true", help="Disable punctuation/formatting.")
     parser.add_argument("--diarize", action="store_true", help="Label speakers (Speaker 0, 1, ...).")
     parser.add_argument(
+        "--keyterm", action="append", metavar="TERM", default=[],
+        help="Domain term to prioritize (nova-3 keyterm prompting). Repeatable: "
+        "--keyterm 'Punta Cana' --keyterm disnea. Aim for 20-50 specific terms.",
+    )
+    parser.add_argument(
+        "--keyterm-file", metavar="PATH",
+        help="Path to a text file with one keyterm per line (# lines ignored). Merged with --keyterm.",
+    )
+    parser.add_argument(
         "--timeout", type=int, default=DEFAULT_TIMEOUT,
         help=f"Seconds to wait for the API; raise for large files (default: {DEFAULT_TIMEOUT}).",
     )
@@ -283,6 +299,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     language = None if args.language.lower() == "auto" else args.language
 
+    keyterm = list(args.keyterm or [])
+    if args.keyterm_file:
+        kt_path = Path(args.keyterm_file).expanduser()
+        if not kt_path.exists():
+            print(f"✗ --keyterm-file not found: {kt_path}", file=sys.stderr)
+            return 1
+        keyterm += [
+            line.strip()
+            for line in kt_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
     exit_code = 0
     for raw in args.audio:
         exit_code |= _process_one(
@@ -291,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
             language=language,
             smart_format=not args.no_smart_format,
             diarize=args.diarize,
+            keyterm=keyterm or None,
             timeout=args.timeout,
             max_retries=args.retries,
             out=args.out,
